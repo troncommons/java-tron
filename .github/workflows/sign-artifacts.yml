@@ -1,12 +1,12 @@
-# This workflow downloads artifacts from AWS S3 that were previously uploaded by the build-test.yml workflow.
+# This workflow downloads artifacts from AWS S3 that were previously uploaded by the build-xxxx.yml workflow.
 # It can optionally sign the downloaded artifacts using GPG and upload the signed artifacts back to S3.
 # 
 # Required inputs:
-# - s3-path: The S3 path for this build (e.g., v1.0.0/7-characters-commit-hash/YYYYMMDD-HHMMSS)
+# - s3-path: The S3 path for this build (e.g., v1.0.0-{YYYYMMDD-HHMMSS}-{7-characters-commit-hash}-plt-jdk)
+# - gpg-fingerprint: GPG key fingerprint for signing
 # 
 # Optional inputs:
 # - download-dir: Directory to download files to (default: ./downloads)
-# - gpg-fingerprint: GPG key fingerprint for signing
 
 name: Sign - Built Artifacts
 
@@ -24,7 +24,7 @@ on:
         type: string
       gpg-fingerprint:
         description: 'GPG key fingerprint used for signing JAR packages'
-        required: false
+        required: true
         type: string
 
 jobs:
@@ -200,7 +200,7 @@ jobs:
           echo "## S3 Upload Summary - Signed Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "Successfully uploaded signed files to \`s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed/\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**S3 Path:** ${{ inputs.s3-path }}" >> $GITHUB_STEP_SUMMARY
+          echo "**S3 Path:** ${{ inputs.s3-path }}-signed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Uploaded Signed Files:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
