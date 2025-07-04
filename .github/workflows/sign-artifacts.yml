@@ -103,7 +103,7 @@ jobs:
     - name: Create download summary
       run: |
         echo "## S3 Download Summary" >> $GITHUB_STEP_SUMMARY
-        echo "Downloaded files from **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}/**" >> $GITHUB_STEP_SUMMARY
+        echo "Downloaded files from \`s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}/\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**S3 Path:** ${{ inputs.s3-path }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -198,7 +198,7 @@ jobs:
           
           # Create a list of uploaded files for the job summary
           echo "## S3 Upload Summary - Signed Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "Successfully uploaded signed files to **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed/**" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully uploaded signed files to \`s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed/\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**S3 Path:** ${{ inputs.s3-path }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -209,6 +209,6 @@ jobs:
         else
           echo "Error: Failed to verify files in S3 bucket after upload"
           echo "## S3 Upload Failed - Signed Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "Failed to verify signed files in **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed/** after upload" >> $GITHUB_STEP_SUMMARY
+          echo "Failed to verify signed files in \`s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed/\` after upload" >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
