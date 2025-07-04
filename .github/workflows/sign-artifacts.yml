@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       s3-path:
-        description: 'S3 path for this build (e.g., v1.0.0-{YYYYMMDD-HHMMSS}-{7-characters-commit-hash})'
+        description: 'S3 path for this build (e.g., v1.0.0-{YYYYMMDD-HHMMSS}-{7-characters-commit-hash}-plt-jdk)'
         required: true
         type: string
       download-dir:
