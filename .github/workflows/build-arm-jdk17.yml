@@ -103,7 +103,7 @@ jobs:
 
           # Create a list of uploaded files for the job summary
           echo "## S3 Upload Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Successfully uploaded files to **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}-arm-jdk17/**" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully uploaded files to `s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}-arm-jdk17/`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Version:** ${{ env.BUILD_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit Hash:** ${{ env.SHORT_SHA }} (full: ${{ env.COMMIT_HASH }})" >> $GITHUB_STEP_SUMMARY
