@@ -5,7 +5,7 @@
 # This workflow will build a Java project with Gradle and cache/restore any dependencies to improve the workflow execution time
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-gradle
 
-name: Build - ARM/Ubuntu-22.04/JDK17
+name: Build - X86_64/Ubuntu-22.04/JDK8
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ on:
 jobs:
   build-and-upload:
     name: Build and Upload to S3 - Ubuntu-22.04-${{ inputs.build-version }}
-    runs-on: ubuntu-22.04-arm
+    runs-on: ubuntu-22.04
 
     # Define environment variables for reuse
     env:
@@ -38,12 +38,12 @@ jobs:
       run: |
         echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
         echo "TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")" >> $GITHUB_ENV
-        echo "S3_PATH=${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-$(date -u +"%Y%m%d-%H%M%S")-$(echo ${{ github.sha }} | cut -c1-7)-arm-jdk17" >> $GITHUB_ENV
-    - name: Set up JDK 17
+        echo "S3_PATH=${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-$(date -u +"%Y%m%d-%H%M%S")-$(echo ${{ github.sha }} | cut -c1-7)-x86_64-jdk8" >> $GITHUB_ENV
+    - name: Set up JDK 8
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
-        distribution: 'temurin'
+        java-version: '8'
+        distribution: 'zulu'
 
     # Configure Gradle for optimal use in GitHub Actions, including caching of downloaded dependencies.
     # See: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
@@ -51,12 +51,12 @@ jobs:
       uses: gradle/actions/setup-gradle@v4.4.1
 
     - name: Build with Gradle Wrapper
-      run: ./gradlew clean build -x test --no-daemon
+      run: ./gradlew clean build --no-daemon
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: artifact-Ubuntu-22.04-${{ env.BUILD_VERSION }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}-arm-jdk17
+        name: artifact-Ubuntu-22.04-${{ env.BUILD_VERSION }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}-x86_64-jdk8
         path: ${{ env.BUILD_OUTPUT_DIR }}
         if-no-files-found: error
 
@@ -103,7 +103,7 @@ jobs:
 
           # Create a list of uploaded files for the job summary
           echo "## S3 Upload Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Successfully uploaded files to \`s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}-arm-jdk17/\`" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully uploaded files to \`s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}-x86_64-jdk8/\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Version:** ${{ env.BUILD_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit Hash:** ${{ env.SHORT_SHA }} (full: ${{ env.COMMIT_HASH }})" >> $GITHUB_STEP_SUMMARY
@@ -116,6 +116,6 @@ jobs:
         else
           echo "Error: Failed to verify files in S3 bucket after upload"
           echo "## S3 Upload Failed" >> $GITHUB_STEP_SUMMARY
-          echo "Failed to verify files in **s3://${{ env.S3_PATH }}/** after upload" >> $GITHUB_STEP_SUMMARY
+          echo "Failed to verify files in \`s3://${{ env.S3_PATH }}/\` after upload" >> $GITHUB_STEP_SUMMARY
           exit 1
         fi
