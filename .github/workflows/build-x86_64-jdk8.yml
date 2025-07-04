@@ -1,0 +1,121 @@
+# This workflow uses actions that are not certified by GitHub.Add commentMore actions
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+# This workflow will build a Java project with Gradle and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-gradle
+
+name: Build - X86_64/Ubuntu-22.04/JDK8
+
+on:
+  workflow_dispatch:
+    inputs:
+        build-version:
+          description: 'Version for this build (e.g., v1.0.0)'
+          required: true
+          type: string
+
+jobs:
+  build-and-upload:
+    name: Build and Upload to S3 - Ubuntu-22.04-${{ inputs.build-version }}
+    runs-on: ubuntu-22.04
+
+    # Define environment variables for reuse
+    env:
+      BUILD_VERSION: ${{ inputs.build-version }}
+      S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      COMMIT_HASH: ${{ github.sha }}
+      BUILD_OUTPUT_DIR: ./build/libs
+
+    permissions:
+      contents: read
+      id-token: write  # Needed for AWS credential provider
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set short SHA and timestamp
+      run: |
+        echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
+        echo "TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")" >> $GITHUB_ENV
+        echo "S3_PATH=${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-$(date -u +"%Y%m%d-%H%M%S")-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
+    - name: Set up JDK 8
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'zulu'
+
+    # Configure Gradle for optimal use in GitHub Actions, including caching of downloaded dependencies.
+    # See: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4.4.1
+
+    - name: Build with Gradle Wrapper
+      run: ./gradlew clean build --no-daemon
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: artifact-Ubuntu-22.04-${{ env.BUILD_VERSION }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}
+        path: ${{ env.BUILD_OUTPUT_DIR }}
+        if-no-files-found: error
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Upload to S3
+      run: |
+        # Set error handling
+        set -e
+
+        # Check if the build version is provided and not empty
+        if [ -z "${{ env.BUILD_VERSION }}" ]; then
+          echo "Error: Build version is empty. Aborting S3 upload."
+          exit 1
+        fi
+
+        # Check if the target directory exists before deleting
+        if aws s3 ls "s3://${{ env.S3_PATH }}/" --recursive | grep -q .; then
+          echo "Cleaning existing files in s3://${{ env.S3_PATH }}/"
+          aws s3 rm "s3://${{ env.S3_PATH }}/" --recursive
+        else
+          echo "No existing files found in s3://${{ env.S3_PATH }}/"
+        fi
+
+        # Check if build output directory exists and has files
+        if [ ! -d "${{ env.BUILD_OUTPUT_DIR }}" ] || [ -z "$(ls -A ${{ env.BUILD_OUTPUT_DIR }})" ]; then
+          echo "Error: ${{ env.BUILD_OUTPUT_DIR }} directory is empty or does not exist. Aborting S3 upload."
+          exit 1
+        fi
+
+        # Upload new files
+        echo "Uploading new files to s3://${{ env.S3_PATH }}/"
+        aws s3 cp --recursive ${{ env.BUILD_OUTPUT_DIR }}/ "s3://${{ env.S3_PATH }}/"
+
+        # Verify upload was successful
+        echo "Verifying upload..."
+        if aws s3 ls "s3://${{ env.S3_PATH }}/" --recursive | grep -q .; then
+          echo "Upload to S3 completed successfully"
+
+          # Create a list of uploaded files for the job summary
+          echo "## S3 Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully uploaded files to **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-${{ env.TIMESTAMP }}-${{ env.SHORT_SHA }}/**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Version:** ${{ env.BUILD_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit Hash:** ${{ env.SHORT_SHA }} (full: ${{ env.COMMIT_HASH }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** ${{ env.TIMESTAMP }} (UTC)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Uploaded Files:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          aws s3 ls "s3://${{ env.S3_PATH }}/" --recursive >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Error: Failed to verify files in S3 bucket after upload"
+          echo "## S3 Upload Failed" >> $GITHUB_STEP_SUMMARY
+          echo "Failed to verify files in **s3://${{ env.S3_PATH }}/** after upload" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
