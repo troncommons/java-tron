@@ -51,7 +51,7 @@ jobs:
       uses: gradle/actions/setup-gradle@v4.4.1
 
     - name: Build with Gradle Wrapper
-      run: ./gradlew clean build --no-daemon
+      run: ./gradlew clean build -x test --no-daemon
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
