@@ -1,0 +1,214 @@
+# This workflow downloads artifacts from AWS S3 that were previously uploaded by the build-test.yml workflow.
+# It can optionally sign the downloaded artifacts using GPG and upload the signed artifacts back to S3.
+# 
+# Required inputs:
+# - s3-path: The S3 path for this build (e.g., v1.0.0/7-characters-commit-hash/YYYYMMDD-HHMMSS)
+# 
+# Optional inputs:
+# - download-dir: Directory to download files to (default: ./downloads)
+# - gpg-fingerprint: GPG key fingerprint for signing
+
+name: Sign - Built Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      s3-path:
+        description: 'S3 path for this build (e.g., v1.0.0-{YYYYMMDD-HHMMSS}-{7-characters-commit-hash})'
+        required: true
+        type: string
+      download-dir:
+        description: 'Directory to download files to'
+        required: false
+        default: './downloads'
+        type: string
+      gpg-fingerprint:
+        description: 'GPG key fingerprint used for signing JAR packages'
+        required: false
+        type: string
+
+jobs:
+  validate-inputs:
+    name: Validate Workflow Inputs
+    runs-on: self-hosted
+    steps:
+      - name: Check GPG fingerprint
+        if: ${{ inputs.gpg-fingerprint == '' }}
+        run: |
+          echo "Error: GPG fingerprint is required for signing artifacts"
+          exit 1
+
+      - name: Inputs validation passed
+        run: echo "All inputs validated successfully"
+
+  download-from-s3-and-sign:
+    name: Download from S3 - ${{ inputs.s3-path }}
+    runs-on: self-hosted
+    needs: validate-inputs
+
+    # Define environment variables for reuse
+    env:
+      DOWNLOAD_DIR: ${{ inputs.download-dir }}
+
+    permissions:
+      contents: read
+      id-token: write  # Needed for AWS credential provider
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set S3 path
+      run: |
+        echo "S3_PATH=${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}" >> $GITHUB_ENV
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Create download directory
+      run: mkdir -p ${{ env.DOWNLOAD_DIR }}
+
+    - name: List files in S3 bucket
+      id: list-files
+      run: |
+        # Check if the S3 path exists
+        if aws s3 ls "s3://${{ env.S3_PATH }}/" --recursive | grep -q .; then
+          echo "Files found in s3://${{ env.S3_PATH }}/"
+          aws s3 ls "s3://${{ env.S3_PATH }}/" --recursive
+          echo "file_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Error: No files found in s3://${{ env.S3_PATH }}/"
+          echo "file_exists=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: Download files from S3
+      if: steps.list-files.outputs.file_exists == 'true'
+      run: |
+        echo "Downloading files from s3://${{ env.S3_PATH }}/ to ${{ env.DOWNLOAD_DIR }}"
+        aws s3 cp "s3://${{ env.S3_PATH }}/" "${{ env.DOWNLOAD_DIR }}/" --recursive
+
+        # Verify download was successful
+        if [ -z "$(ls -A ${{ env.DOWNLOAD_DIR }})" ]; then
+          echo "Error: Failed to download files from S3"
+          exit 1
+        else
+          echo "Download from S3 completed successfully"
+          ls -la "${{ env.DOWNLOAD_DIR }}"
+        fi
+
+    - name: Create download summary
+      run: |
+        echo "## S3 Download Summary" >> $GITHUB_STEP_SUMMARY
+        echo "Downloaded files from **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}/**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**S3 Path:** ${{ inputs.s3-path }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Downloaded Files:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        ls -la "${{ env.DOWNLOAD_DIR }}" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload downloaded files as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: downloaded-files-${{ inputs.s3-path }}
+        path: ${{ env.DOWNLOAD_DIR }}
+        if-no-files-found: error
+
+    # GPG fingerprint is already validated in the validate-inputs job
+
+    - name: List files to sign
+      run: |
+        echo "Files to sign:"
+        ls -la ${{ env.DOWNLOAD_DIR }}
+
+    - name: Sign artifacts
+      run: |
+        # Sign each JAR file
+        for file in ${{ env.DOWNLOAD_DIR }}/*.jar; do
+          if [ -f "$file" ]; then
+            echo "Signing $file"
+            gpg --local-user ${{ inputs.gpg-fingerprint }} --detach-sign "$file"
+          fi
+        done
+
+        # Verify signature files were created
+        echo "Signature files created:"
+        ls -la ${{ env.DOWNLOAD_DIR }}/*.sig || echo "No signature files found"
+
+    - name: Create signing summary
+      run: |
+        echo "## Signing Summary" >> $GITHUB_STEP_SUMMARY
+        echo "Signed artifacts for **${{ inputs.s3-path }}**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**GPG Key:** ${{ inputs.gpg-fingerprint }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Signed Files:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        ls -la ${{ env.DOWNLOAD_DIR }} >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload signed artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: signed-files-${{ inputs.s3-path }}
+        path: ${{ env.DOWNLOAD_DIR }}
+        if-no-files-found: error
+
+  upload-signed-to-s3:
+    name: Upload Signed Artifacts to S3
+    runs-on: ubuntu-22.04
+    needs: download-from-s3-and-sign
+    
+    permissions:
+      actions: read
+      contents: read
+      id-token: write  # Needed for AWS credential provider
+    
+    steps:
+    - name: Download signed artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: signed-files-${{ inputs.s3-path }}
+        path: ./signed-artifacts/
+    
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Set S3 path for signed artifacts
+      run: |
+        echo "S3_SIGNED_PATH=${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed" >> $GITHUB_ENV
+    
+    - name: Upload signed artifacts to S3
+      run: |
+        echo "Uploading signed artifacts to s3://${{ env.S3_SIGNED_PATH }}/"
+        aws s3 cp ./signed-artifacts/ "s3://${{ env.S3_SIGNED_PATH }}/" --recursive
+        
+        # Verify upload was successful
+        if aws s3 ls "s3://${{ env.S3_SIGNED_PATH }}/" --recursive | grep -q .; then
+          echo "Upload of signed artifacts to S3 completed successfully"
+          
+          # Create a list of uploaded files for the job summary
+          echo "## S3 Upload Summary - Signed Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully uploaded signed files to **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed/**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**S3 Path:** ${{ inputs.s3-path }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Uploaded Signed Files:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          aws s3 ls "s3://${{ env.S3_SIGNED_PATH }}/" --recursive >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Error: Failed to verify files in S3 bucket after upload"
+          echo "## S3 Upload Failed - Signed Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "Failed to verify signed files in **s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3-path }}-signed/** after upload" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
