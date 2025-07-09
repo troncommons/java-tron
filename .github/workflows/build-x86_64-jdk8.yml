@@ -14,10 +14,15 @@ on:
           description: 'Version for this build (e.g., v1.0.0)'
           required: true
           type: string
+        upload-to-s3:
+          description: 'Upload artifacts to S3'
+          required: false
+          type: boolean
+          default: true
 
 jobs:
   build-and-upload:
-    name: Build and Upload to S3 - Ubuntu-22.04-${{ inputs.build-version }}
+    name: ${{ inputs.upload-to-s3 != false && 'Build and Upload to S3' || 'Build' }} - Ubuntu-22.04-${{ inputs.build-version }}
     runs-on: ubuntu-22.04
 
     # Define environment variables for reuse
@@ -38,7 +43,9 @@ jobs:
       run: |
         echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
         echo "TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")" >> $GITHUB_ENV
-        echo "S3_PATH=${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-$(date -u +"%Y%m%d-%H%M%S")-$(echo ${{ github.sha }} | cut -c1-7)-x86_64-jdk8" >> $GITHUB_ENV
+        if [[ "${{ inputs.upload-to-s3 }}" != "false" ]]; then
+          echo "S3_PATH=${{ secrets.AWS_S3_BUCKET }}/${{ inputs.build-version }}-$(date -u +"%Y%m%d-%H%M%S")-$(echo ${{ github.sha }} | cut -c1-7)-x86_64-jdk8" >> $GITHUB_ENV
+        fi
     - name: Set up JDK 8
       uses: actions/setup-java@v4
       with:
@@ -51,7 +58,7 @@ jobs:
       uses: gradle/actions/setup-gradle@v4.4.1
 
     - name: Build with Gradle Wrapper
-      run: ./gradlew clean build -x test --no-daemon
+      run: ./gradlew clean build --no-daemon
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -61,6 +68,7 @@ jobs:
         if-no-files-found: error
 
     - name: Configure AWS Credentials
+      if: ${{ inputs.upload-to-s3 != false }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -68,6 +76,7 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
 
     - name: Upload to S3
+      if: ${{ inputs.upload-to-s3 != false }}
       run: |
         # Set error handling
         set -e
