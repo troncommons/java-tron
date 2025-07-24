@@ -18,7 +18,7 @@ on:
           description: 'Upload artifacts to S3'
           required: false
           type: boolean
-          default: true
+          default: false
 
 jobs:
   build-and-upload:
@@ -60,56 +60,55 @@ jobs:
     - name: Build with Gradle Wrapper
       run: ./gradlew clean build --no-daemon -x test
     
-    # # Set up QEMU for multi-platform support
-    # - name: Set up QEMU
-    #   uses: docker/setup-qemu-action@v3
-    #   with:
-    #     platforms: linux/amd64
-
-    # - name: Dependency Check
-    #   uses: dependency-check/Dependency-Check_Action@1.1.0
-    #   env:
-    #     # actions/setup-java@v1 changes JAVA_HOME, so it needs to be reset to match the depcheck image
-    #     JAVA_HOME: /opt/jdk
-    #   with:
-    #     project: 'java-tron'
-    #     path: '.'
-    #     format: 'HTML'
-    #     out: 'reports'
-    # - name: Generate timestamp
-    #   run: echo "BUILD_TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")" >> $GITHUB_ENV
-    # - name: Get Repository Name
-    #   run: echo "REPO_NAME=$(echo '${{ github.repository }}' | cut -d'/' -f2)" >> $GITHUB_ENV
-    # - name: Upload report
-    #   if: always()
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: dependency-check-${{ env.REPO_NAME }}-${{ env.BUILD_TIMESTAMP }}
-    #     path: ${{github.workspace}}/reports
-
-    # Run Trivy to scan JAR files in build/libs
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@0.28.0
+    # Set up QEMU for multi-platform support
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
       with:
-        scan-type: 'fs'
-        scan-ref: '.' # Directory containing JAR files
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-        severity: 'LOW,MEDIUM,HIGH,CRITICAL'
-        ignore-unfixed: true
-    # # Upload Trivy scan results to GitHub Security tab
-    # - name: Upload Trivy scan results
-    #   uses: github/codeql-action/upload-sarif@v3
-    #   with:
-    #     sarif_file: 'trivy-results.sarif'
-
-    # Upload JAR and scan report as artifacts
-    - name: Upload artifacts
+        platforms: linux/amd64
+    - name: Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      env:
+        # actions/setup-java@v1 changes JAVA_HOME, so it needs to be reset to match the depcheck image
+        JAVA_HOME: /opt/jdk
+      with:
+        project: 'java-tron'
+        path: './build/libs/'
+        format: 'HTML'
+        out: 'reports'
+    - name: Generate timestamp
+      run: echo "BUILD_TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")" >> $GITHUB_ENV
+    - name: Get Repository Name
+      run: echo "REPO_NAME=$(echo '${{ github.repository }}' | cut -d'/' -f2)" >> $GITHUB_ENV
+    - name: Upload report
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-and-scan-artifacts
-        path: |
-          trivy-results.sarif
+        name: dependency-check-${{ env.REPO_NAME }}-${{ env.BUILD_TIMESTAMP }}
+        path: ${{github.workspace}}/reports
+
+    # # Run Trivy to scan JAR files in build/libs
+    # - name: Run Trivy vulnerability scanner
+    #   uses: aquasecurity/trivy-action@0.28.0
+    #   with:
+    #     scan-type: 'fs'
+    #     scan-ref: '.' # Directory containing JAR files
+    #     format: 'sarif'
+    #     output: 'trivy-results.sarif'
+    #     severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+    #     ignore-unfixed: true
+    # # # Upload Trivy scan results to GitHub Security tab
+    # # - name: Upload Trivy scan results
+    # #   uses: github/codeql-action/upload-sarif@v3
+    # #   with:
+    # #     sarif_file: 'trivy-results.sarif'
+
+    # # Upload JAR and scan report as artifacts
+    # - name: Upload artifacts
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: build-and-scan-artifacts
+    #     path: |
+    #       trivy-results.sarif
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
