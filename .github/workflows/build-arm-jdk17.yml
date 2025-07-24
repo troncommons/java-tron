@@ -72,7 +72,7 @@ jobs:
         JAVA_HOME: /opt/jdk
       with:
         project: 'java-tron'
-        path: './build/libs/'
+        path: '.'
         format: 'HTML'
         out: 'reports'
     - name: Generate timestamp
