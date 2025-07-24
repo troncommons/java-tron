@@ -92,7 +92,7 @@ jobs:
       uses: aquasecurity/trivy-action@0.28.0
       with:
         scan-type: 'fs'
-        scan-ref: 'build/libs' # Directory containing JAR files
+        scan-ref: '${{ env.BUILD_OUTPUT_DIR }}' # Directory containing JAR files
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH'
@@ -109,6 +109,7 @@ jobs:
       with:
         name: build-and-scan-artifacts
         path: |
+          ${{ env.BUILD_OUTPUT_DIR }}/*.jar
           trivy-results.sarif
 
     - name: Upload artifacts
