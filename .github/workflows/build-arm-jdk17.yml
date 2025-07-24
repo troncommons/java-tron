@@ -109,7 +109,6 @@ jobs:
       with:
         name: build-and-scan-artifacts
         path: |
-          ${{ env.BUILD_OUTPUT_DIR }}/*.jar
           trivy-results.sarif
 
     - name: Upload artifacts
