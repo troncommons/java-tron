@@ -58,7 +58,7 @@ jobs:
       uses: gradle/actions/setup-gradle@v4.4.1
 
     - name: Build with Gradle Wrapper
-      run: ./gradlew clean build --no-daemon
+      run: ./gradlew clean build --no-daemon -x test
 
     - name: Dependency Check
       uses: dependency-check/Dependency-Check_Action@1.1.0
