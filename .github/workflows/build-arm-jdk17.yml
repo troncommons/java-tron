@@ -97,11 +97,11 @@ jobs:
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH'
         ignore-unfixed: true
-    # Upload Trivy scan results to GitHub Security tab
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-results.sarif'
+    # # Upload Trivy scan results to GitHub Security tab
+    # - name: Upload Trivy scan results
+    #   uses: github/codeql-action/upload-sarif@v3
+    #   with:
+    #     sarif_file: 'trivy-results.sarif'
 
     # Upload JAR and scan report as artifacts
     - name: Upload artifacts
@@ -109,7 +109,6 @@ jobs:
       with:
         name: build-and-scan-artifacts
         path: |
-          build/libs/*.jar
           trivy-results.sarif
 
     - name: Upload artifacts
